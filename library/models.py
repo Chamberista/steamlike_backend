@@ -44,3 +44,12 @@ class LibraryEntry(models.Model):
             return 3
         else:
             return -1
+
+class GameEntry(models.Model):
+    external_game_id = models.CharField(max_length=255)
+    status = models.CharField(max_length=255)
+    hours_played = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.external_game_id} - {self.status}"
