@@ -58,3 +58,76 @@ Si cambias el frontend, ajusta `DJANGO_CORS_ALLOWED_ORIGINS` y `DJANGO_CSRF_TRUS
 - `library`: modelo `LibraryEntry`
 
 > No hay endpoints API predefinidos (salvo `admin/` y `health/`).
+
+---
+
+# Optativa
+### Ejecución de los tests
+
+El proyecto se ejecuta dentro de contenedores. Por tanto, los tests deben lanzarse **desde el contenedor** del backend.
+
+#### 1) Levantar los contenedores (si no están levantados)
+
+```
+docker compose up -d
+```
+
+#### 2) Ejecutar todos los tests
+
+La forma habitual es ejecutar `manage.py test` dentro del servicio del backend:
+
+```
+docker compose exec web python manage.py test
+```
+
+#### 3) Ejecutar solo una parte (opcional)
+
+Ejecutar solo los tests de una app:
+
+```
+docker compose exec web python manage.py test library
+```
+
+Ejecutar una clase de tests concreta (ejemplo):
+
+```
+docker compose exec web python manage.py test library.tests.test_models.LibraryEntryExternalIdLengthTests
+```
+
+### Ejecución de tests con coverage
+
+Este comando ejecuta todos los tests del proyecto y recoge información de cobertura:
+
+```
+docker compose exec web coverage run manage.py test
+```
+
+Si algún test falla, el comando terminará mostrando el error correspondiente.
+
+---
+
+### Ver el informe de coverage en texto
+
+Una vez ejecutados los tests, se puede ver un resumen de la cobertura en la consola:
+
+```
+docker compose exec web coverage report
+```
+---
+
+### Generar el informe HTML de coverage
+
+Para generar un informe visual en HTML:
+
+```
+docker compose exec web coverage html
+```
+
+Este comando crea una carpeta llamada `htmlcov/`. Puedes visualizar el archivo `htmlconv/index.html` que tendrá los resultados.
+
+---
+
+### Nota importante
+
+El coverage es una métrica orientativa,
+pero **no mide la calidad de los tests**.
