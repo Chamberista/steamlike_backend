@@ -54,7 +54,7 @@ def entries(request):
                 return validation_error({"body": "Body vacío"})
             
             external_game_id = data.get("external_game_id")
-            if not external_game_id or not str(external_game_id).isdigit():
+            if not external_game_id or isinstance(external_game_id, int):
                 return validation_error({"external_game_id": "Debe ser una cadena de texto"})
             
             status = data.get("status", LibraryEntry.STATUS_WISHLIST)
