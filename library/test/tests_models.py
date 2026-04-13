@@ -66,3 +66,24 @@ class LibraryEntryExternalIdLengthTests(TestCase):
         # Comprobaciones
         with self.assertRaises(TypeError):
             entry.external_id_length()
+
+class LibraryEntryExternalIdUpperTests(TestCase):
+    def test_external_id_upper(self):
+        # Precondiciones
+        entry = LibraryEntry(external_game_id="abc")
+
+        # Llamada
+        cadena = entry.external_id_upper()
+
+        # Comprobaciones
+        self.assertEqual(cadena, "ABC")
+
+    def test_external_id_upper_empty_string(self):
+        # Precondiciones
+        entry = LibraryEntry(external_game_id="")
+
+        # Llamada
+        cadena = entry.external_id_upper()
+
+        # Comprobaciones
+        self.assertEqual(cadena, "")
