@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
+from django.contrib.auth.decorators import login_required
 from .models import LibraryEntry
 
 def validation_error(details):
@@ -25,13 +26,14 @@ def duplicate_entry_error(field, value):
 def health(request):
     return JsonResponse({"status": "ok"})
 
+@login_required
 @csrf_exempt
 def entries(request):
-    """Maneja GET (listar) y POST (crear)"""
+    """Maneja GET (listar) y POST (crear) - Solo del usuario autenticado"""
     
     if request.method == "GET":
-        # Listar todas las entradas
-        all_entries = LibraryEntry.objects.all()
+        # Listar SOLO las entradas del usuario actual
+        user_entries = LibraryEntry.objects.filter(user=request.user)
         
         data = [
             {
@@ -40,7 +42,7 @@ def entries(request):
                 "status": entry.status,
                 "hours_played": entry.hours_played
             }
-            for entry in all_entries
+            for entry in user_entries
         ]
         
         return JsonResponse(data, safe=False)
@@ -68,7 +70,9 @@ def entries(request):
                 return validation_error({"hours_played": "Debe ser un número entero >= 0"})
             
             try:
+                # IMPORTANTE: Asignar el usuario actual
                 entry = LibraryEntry.objects.create(
+                    user=request.user,  # ← Aquí va el usuario
                     external_game_id=external_game_id,
                     status=status,
                     hours_played=hours_played
@@ -87,32 +91,15 @@ def entries(request):
         except Exception as e:
             return validation_error({"server": str(e)})
 
-@require_GET
-def entries_list(request):
-    """Devuelve todas las entradas de la biblioteca"""
-    entries = LibraryEntry.objects.all()
-    
-    data = [
-        {
-            "id": entry.id,
-            "external_game_id": entry.external_game_id,
-            "status": entry.status,
-            "hours_played": entry.hours_played
-        }
-        for entry in entries
-    ]
-    
-    return JsonResponse(data, safe=False)
-
 @require_http_methods(["GET", "PATCH"])
 @csrf_exempt
 def entries_detail(request, entry_id):
     """GET: obtiene una entrada. PATCH: actualiza una entrada"""
     
     try:
-        # Validar que la entrada existe
+        # Validar que la entrada existe Y pertenece al usuario actual
         try:
-            entry = LibraryEntry.objects.get(id=entry_id)
+            entry = LibraryEntry.objects.get(id=entry_id, user=request.user)
         except LibraryEntry.DoesNotExist:
             return JsonResponse({
                 "error": "not_found",
