@@ -87,3 +87,133 @@ class LibraryEntryExternalIdUpperTests(TestCase):
 
         # Comprobaciones
         self.assertEqual(cadena, "")
+
+    def test_external_id_upper_mixed_case(self):
+        # Precondiciones: ID con mayúsculas y minúsculas mezcladas
+        entry = LibraryEntry(external_game_id="AbC123xYz")
+        
+        # Llamada
+        resultado = entry.external_id_upper()
+        
+        # Comprobaciones
+        self.assertEqual(resultado, "ABC123XYZ")
+
+
+class LibraryEntryHoursPlayedLabelTests(TestCase):
+    """Tests para el método hours_played_label()"""
+    
+    def test_hours_played_label_returns_none_when_zero(self):
+        # Precondiciones: 0 horas jugadas
+        entry = LibraryEntry(hours_played=0)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones: debe devolver "none"
+        self.assertEqual(label, "none")
+    
+    def test_hours_played_label_returns_low_when_between_1_and_9(self):
+        # Precondiciones: 5 horas jugadas (dentro de rango bajo)
+        entry = LibraryEntry(hours_played=5)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones: debe devolver "low"
+        self.assertEqual(label, "low")
+    
+    def test_hours_played_label_returns_low_at_1(self):
+        # Precondiciones: límite inferior del rango bajo
+        entry = LibraryEntry(hours_played=1)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones
+        self.assertEqual(label, "low")
+    
+    def test_hours_played_label_returns_low_at_9(self):
+        # Precondiciones: límite superior del rango bajo
+        entry = LibraryEntry(hours_played=9)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones
+        self.assertEqual(label, "low")
+    
+    def test_hours_played_label_returns_high_when_10_or_more(self):
+        # Precondiciones: 10 horas jugadas (inicio del rango alto)
+        entry = LibraryEntry(hours_played=10)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones: debe devolver "high"
+        self.assertEqual(label, "high")
+    
+    def test_hours_played_label_returns_high_for_large_values(self):
+        # Precondiciones: muchas horas jugadas
+        entry = LibraryEntry(hours_played=1000)
+        
+        # Llamada
+        label = entry.hours_played_label()
+        
+        # Comprobaciones
+        self.assertEqual(label, "high")
+
+class LibraryEntryStatusValueTests(TestCase):
+    """Tests para el método status_value()"""
+    
+    def test_status_value_returns_0_for_wishlist(self):
+        # Precondiciones: status es "wishlist"
+        entry = LibraryEntry(status=LibraryEntry.STATUS_WISHLIST)
+        
+        # Llamada
+        valor = entry.status_value()
+        
+        # Comprobaciones: debe devolver 0
+        self.assertEqual(valor, 0)
+    
+    def test_status_value_returns_1_for_playing(self):
+        # Precondiciones: status es "playing"
+        entry = LibraryEntry(status=LibraryEntry.STATUS_PLAYING)
+        
+        # Llamada
+        valor = entry.status_value()
+        
+        # Comprobaciones: debe devolver 1
+        self.assertEqual(valor, 1)
+    
+    def test_status_value_returns_2_for_completed(self):
+        # Precondiciones: status es "completed"
+        entry = LibraryEntry(status=LibraryEntry.STATUS_COMPLETED)
+        
+        # Llamada
+        valor = entry.status_value()
+        
+        # Comprobaciones: debe devolver 2
+        self.assertEqual(valor, 2)
+    
+    def test_status_value_returns_3_for_dropped(self):
+        # Precondiciones: status es "dropped"
+        entry = LibraryEntry(status=LibraryEntry.STATUS_DROPPED)
+        
+        # Llamada
+        valor = entry.status_value()
+        
+        # Comprobaciones: debe devolver 3
+        self.assertEqual(valor, 3)
+    
+    def test_status_value_maintains_order(self):
+        # Precondiciones: comprobar que el orden es coherente
+        wishlist_val = LibraryEntry(status=LibraryEntry.STATUS_WISHLIST).status_value()
+        playing_val = LibraryEntry(status=LibraryEntry.STATUS_PLAYING).status_value()
+        completed_val = LibraryEntry(status=LibraryEntry.STATUS_COMPLETED).status_value()
+        dropped_val = LibraryEntry(status=LibraryEntry.STATUS_DROPPED).status_value()
+        
+        # Comprobaciones: el orden debe ser creciente
+        self.assertLess(wishlist_val, playing_val)
+        self.assertLess(playing_val, completed_val)
+        self.assertLess(completed_val, dropped_val)
+
