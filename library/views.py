@@ -4,7 +4,12 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user_model
 from .models import LibraryEntry
+
+User = get_user_model()
+
+# ===== FUNCIONES AUXILIARES =====
 
 def validation_error(details):
     """Devuelve un error de validación en formato estándar"""
@@ -22,8 +27,91 @@ def duplicate_entry_error(field, value):
         "details": {field: "duplicate"}
     }, status=400)
 
+# ===== AUTH ENDPOINTS =====
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def register(request):
+    """
+    POST /api/auth/register/
+    Registra un nuevo usuario en la plataforma
+    
+    Validaciones:
+    - JSON válido
+    - Body no vacío
+    - username y password presentes y son strings
+    - username no existe ya
+    - password mínimo 8 caracteres
+    
+    Respuestas:
+    - 201: Usuario creado exitosamente
+    - 400: Error de validación
+    """
+    
+    try:
+        # Parsear JSON del body
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return validation_error({"body": "JSON inválido"})
+    
+    # Validar que el body no está vacío
+    if not data:
+        return validation_error({"body": "Body vacío"})
+    
+    # Obtener campos del JSON
+    username = data.get("username")
+    password = data.get("password")
+    
+    # ===== VALIDACIÓN: username existe =====
+    if username is None:
+        return validation_error({"username": "Campo requerido"})
+    
+    # ===== VALIDACIÓN: password existe =====
+    if password is None:
+        return validation_error({"password": "Campo requerido"})
+    
+    # ===== VALIDACIÓN: username es string =====
+    if not isinstance(username, str):
+        return validation_error({"username": "Debe ser texto"})
+    
+    # ===== VALIDACIÓN: password es string =====
+    if not isinstance(password, str):
+        return validation_error({"password": "Debe ser texto"})
+    
+    # ===== VALIDACIÓN: username no está vacío =====
+    if not username.strip():
+        return validation_error({"username": "No puede estar vacío"})
+    
+    # ===== VALIDACIÓN: password mínimo 8 caracteres =====
+    if len(password) < 8:
+        return validation_error({"password": "Mínimo 8 caracteres"})
+    
+    # ===== VALIDACIÓN: username no existe ya =====
+    if User.objects.filter(username=username).exists():
+        return validation_error({"username": "Ya existe"})
+    
+    # ===== CREAR USUARIO =====
+    try:
+        user = User.objects.create_user(
+            username=username,
+            password=password
+        )
+        
+        # ===== RESPUESTA EXITOSA =====
+        # Devuelve id y username, NUNCA la contraseña
+        return JsonResponse({
+            "id": user.id,
+            "username": user.username
+        }, status=201)
+    
+    except Exception as e:
+        return validation_error({"server": str(e)})
+
+# ===== LIBRARY ENDPOINTS =====
+
 @require_GET
 def health(request):
+    """GET /api/health/ - Health check"""
     return JsonResponse({"status": "ok"})
 
 @login_required
