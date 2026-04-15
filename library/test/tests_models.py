@@ -98,6 +98,16 @@ class LibraryEntryExternalIdUpperTests(TestCase):
         # Comprobaciones
         self.assertEqual(resultado, "ABC123XYZ")
 
+    def test_external_id_upper_converts_number_to_string(self):
+        # Precondiciones: ID es un número
+        entry = LibraryEntry(external_game_id=12345)
+        
+        # Llamada
+        resultado = entry.external_id_upper()
+        
+        # Comprobaciones: números se devuelven como string
+        self.assertEqual(resultado, "12345")
+
 
 class LibraryEntryHoursPlayedLabelTests(TestCase):
     """Tests para el método hours_played_label()"""
@@ -204,6 +214,16 @@ class LibraryEntryStatusValueTests(TestCase):
         
         # Comprobaciones: debe devolver 3
         self.assertEqual(valor, 3)
+    
+    def test_status_value_returns_minus_1_for_invalid_status(self):
+        # Precondiciones: status inválido
+        entry = LibraryEntry(status="invalid_status")
+        
+        # Llamada
+        valor = entry.status_value()
+        
+        # Comprobaciones: debe devolver -1
+        self.assertEqual(valor, -1)
     
     def test_status_value_maintains_order(self):
         # Precondiciones: comprobar que el orden es coherente
