@@ -1,10 +1,9 @@
-import json 
+import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import IntegrityError
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate, login
 from .models import LibraryEntry
 
 User = get_user_model()
@@ -107,6 +106,40 @@ def register(request):
     except Exception as e:
         return validation_error({"server": str(e)})
 
+@require_http_methods(["POST"])
+@csrf_exempt
+def login_view(request):
+    """POST /api/auth/login/"""
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return validation_error({"body": "JSON inválido"})
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if username is None or password is None:
+        return validation_error({"fields": "username y password son requeridos"})
+
+    if not isinstance(username, str) or not isinstance(password, str):
+        return validation_error({"fields": "username y password deben ser texto"})
+
+    user = authenticate(request, username=username, password=password)
+    if user is None:
+        return JsonResponse({"error": "unauthorized", "message": "Credenciales incorrectas"}, status=401)
+
+    login(request, user)
+    return JsonResponse({"id": user.id, "username": user.username}, status=200)
+
+
+@require_GET
+def me(request):
+    """GET /api/users/me/"""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "unauthorized", "message": "No autenticado"}, status=401)
+    return JsonResponse({"id": request.user.id, "username": request.user.username}, status=200)
+
+
 # ===== LIBRARY ENDPOINTS =====
 
 @require_GET
@@ -114,11 +147,12 @@ def health(request):
     """GET /api/health/ - Health check"""
     return JsonResponse({"status": "ok"})
 
-@login_required
 @csrf_exempt
 def entries(request):
     """Maneja GET (listar) y POST (crear) - Solo del usuario autenticado"""
-    
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "unauthorized", "message": "No autenticado"}, status=401)
+
     if request.method == "GET":
         # Listar SOLO las entradas del usuario actual
         user_entries = LibraryEntry.objects.filter(user=request.user)
@@ -157,10 +191,13 @@ def entries(request):
             if not isinstance(hours_played, int) or hours_played < 0:
                 return validation_error({"hours_played": "Debe ser un número entero >= 0"})
             
+            if LibraryEntry.objects.filter(user=request.user, external_game_id=external_game_id).exists():
+                return duplicate_entry_error("external_game_id", external_game_id)
+
             try:
                 # IMPORTANTE: Asignar el usuario actual
                 entry = LibraryEntry.objects.create(
-                    user=request.user,  # ← Aquí va el usuario
+                    user=request.user,
                     external_game_id=external_game_id,
                     status=status,
                     hours_played=hours_played
@@ -183,7 +220,9 @@ def entries(request):
 @csrf_exempt
 def entries_detail(request, entry_id):
     """GET: obtiene una entrada. PATCH: actualiza una entrada"""
-    
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "unauthorized", "message": "No autenticado"}, status=401)
+
     try:
         # Validar que la entrada existe Y pertenece al usuario actual
         try:
