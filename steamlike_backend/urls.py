@@ -1,9 +1,10 @@
 from django.contrib import admin
-from django.urls import path, include
-from library.views import health
+from django.urls import path
+from library.views import health, entries, entries_detail
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    #path("api/library/", include("core.urls")),
-    path("api/health/", health)
+    path("api/health/", health, name="health"),
+    path("api/library/entries/", entries, name="entries"),  # GET y POST
+    path("api/library/entries/<int:entry_id>/", entries_detail, name="entries_detail"),  # GET y PATCH
 ]
