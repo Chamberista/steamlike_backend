@@ -201,9 +201,9 @@ def entries(request):
                     external_game_id=external_game_id,
                     status=status,
                     hours_played=hours_played
-                )
-            except IntegrityError:
-                return duplicate_entry_error("external_game_id", external_game_id)
+                ) 
+            except Exception as e:
+                return validation_error({"server": str(e)})
             
             return JsonResponse({
                 "id": entry.id,
