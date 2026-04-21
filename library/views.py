@@ -140,6 +140,44 @@ def me(request):
     return JsonResponse({"id": request.user.id, "username": request.user.username}, status=200)
 
 
+@require_http_methods(["POST"])
+@csrf_exempt
+def change_password(request):
+    """POST /api/users/me/password/"""
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "unauthorized", "message": "No autenticado"}, status=401)
+
+    try:
+        data = json.loads(request.body)
+    except json.JSONDecodeError:
+        return validation_error({"body": "JSON inválido"})
+
+    if not data:
+        return validation_error({"body": "Body vacío"})
+
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    if current_password is None:
+        return validation_error({"current_password": "Campo requerido"})
+    if new_password is None:
+        return validation_error({"new_password": "Campo requerido"})
+
+    if not isinstance(current_password, str) or not isinstance(new_password, str):
+        return validation_error({"fields": "Deben ser texto"})
+
+    if not request.user.check_password(current_password):
+        return validation_error({"current_password": "Contraseña actual incorrecta"})
+
+    if len(new_password) < 8:
+        return validation_error({"new_password": "Mínimo 8 caracteres"})
+
+    request.user.set_password(new_password)
+    request.user.save()
+
+    return JsonResponse({"ok": True}, status=200)
+
+
 # ===== LIBRARY ENDPOINTS =====
 
 @require_GET
