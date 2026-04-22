@@ -179,6 +179,9 @@ def entries_detail(request, entry_id):
         if err:
             return err
 
+        if not data.keys() & {"status", "hours_played"}:
+            return validation_error({"fields": "Debes enviar al menos un campo para actualizar: status, hours_played"})
+
         allowed_fields = {"status", "hours_played"}
         invalid_fields = set(data.keys()) - allowed_fields
         if invalid_fields:
