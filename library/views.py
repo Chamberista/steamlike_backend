@@ -1,7 +1,7 @@
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
-from django.contrib.auth import get_user_model, authenticate, login
+from django.http import JsonResponse, HttpResponse
+from django.contrib.auth import get_user_model, authenticate, login, logout
 from .models import LibraryEntry
 from .utils import (
     validation_error, unauthorized_error, not_found_error,
@@ -44,6 +44,14 @@ def register(request):
         return JsonResponse({"id": user.id, "username": user.username}, status=201)
     except Exception as e:
         return validation_error({"server": str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def logout_view(request):
+    """POST /api/auth/logout/"""
+    logout(request)
+    return HttpResponse(status=204)
 
 
 @require_http_methods(["POST"])
