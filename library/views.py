@@ -158,10 +158,10 @@ def entries(request):
         return validation_error({"server": str(e)})
 
 
-@require_http_methods(["GET", "PATCH"])
+@require_http_methods(["GET", "PATCH", "PUT"])
 @csrf_exempt
 def entries_detail(request, entry_id):
-    """GET /api/library/entries/<id>/ — detalle. PATCH — actualizar."""
+    """GET — detalle. PATCH — actualización parcial. PUT — sustitución completa."""
     if not request.user.is_authenticated:
         return unauthorized_error()
 
@@ -173,25 +173,55 @@ def entries_detail(request, entry_id):
     if request.method == "GET":
         return JsonResponse(serialize_entry(entry))
 
-    # PATCH
+    # PATCH — actualización parcial
+    if request.method == "PATCH":
+        data, err = parse_json_body(request)
+        if err:
+            return err
+
+        allowed_fields = {"status", "hours_played"}
+        invalid_fields = set(data.keys()) - allowed_fields
+        if invalid_fields:
+            return validation_error({"unknown_fields": f"Campos no permitidos: {', '.join(invalid_fields)}"})
+
+        if "status" in data:
+            if data["status"] not in LibraryEntry.ALLOWED_STATUSES:
+                return validation_error({"status": f"Debe ser uno de: {', '.join(LibraryEntry.ALLOWED_STATUSES)}"})
+            entry.status = data["status"]
+
+        if "hours_played" in data:
+            if not isinstance(data["hours_played"], int) or data["hours_played"] < 0:
+                return validation_error({"hours_played": "Debe ser un número entero >= 0"})
+            entry.hours_played = data["hours_played"]
+
+        entry.save()
+        return JsonResponse(serialize_entry(entry), status=200)
+
+    # PUT — sustitución completa
     data, err = parse_json_body(request)
     if err:
         return err
 
-    allowed_fields = {"status", "hours_played"}
-    invalid_fields = set(data.keys()) - allowed_fields
-    if invalid_fields:
-        return validation_error({"unknown_fields": f"Campos no permitidos: {', '.join(invalid_fields)}"})
+    external_game_id = data.get("external_game_id")
+    status = data.get("status")
+    hours_played = data.get("hours_played")
 
-    if "status" in data:
-        if data["status"] not in LibraryEntry.ALLOWED_STATUSES:
-            return validation_error({"status": f"Debe ser uno de: {', '.join(LibraryEntry.ALLOWED_STATUSES)}"})
-        entry.status = data["status"]
+    if external_game_id is None:
+        return validation_error({"external_game_id": "Campo requerido"})
+    if status is None:
+        return validation_error({"status": "Campo requerido"})
+    if hours_played is None:
+        return validation_error({"hours_played": "Campo requerido"})
 
-    if "hours_played" in data:
-        if not isinstance(data["hours_played"], int) or data["hours_played"] < 0:
-            return validation_error({"hours_played": "Debe ser un número entero >= 0"})
-        entry.hours_played = data["hours_played"]
+    if not isinstance(external_game_id, str) or not external_game_id.strip():
+        return validation_error({"external_game_id": "Debe ser una cadena de texto no vacía"})
+    if status not in LibraryEntry.ALLOWED_STATUSES:
+        return validation_error({"status": f"Debe ser uno de: {', '.join(LibraryEntry.ALLOWED_STATUSES)}"})
+    if not isinstance(hours_played, int) or hours_played < 0:
+        return validation_error({"hours_played": "Debe ser un número entero >= 0"})
 
+    entry.external_game_id = external_game_id
+    entry.status = status
+    entry.hours_played = hours_played
     entry.save()
     return JsonResponse(serialize_entry(entry), status=200)
