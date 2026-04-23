@@ -92,6 +92,40 @@ class RegisterInvalidTests(TestCase):
         self.assertEqual(response.json()["error"], "validation_error")
 
 
+class MeTests(TestCase):
+
+    def test_me_without_login_returns_401(self):
+        # Precondiciones: sin autenticar
+
+        # Llamada
+        response = self.client.get("/api/users/me/")
+
+        # Comprobaciones
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["error"], "unauthorized")
+        self.assertEqual(response.json()["message"], "No autenticado")
+
+    def test_me_after_login_returns_200_with_id_and_username(self):
+        # Precondiciones: usuario creado y sesión iniciada
+        User.objects.create_user(username="testuser", password="password123")
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": "testuser", "password": "password123"}),
+            content_type="application/json",
+        )
+
+        # Llamada
+        response = self.client.get("/api/users/me/")
+
+        # Comprobaciones
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("id", data)
+        self.assertIn("username", data)
+        self.assertEqual(data["username"], "testuser")
+        self.assertNotIn("password", data)
+
+
 class LoginValidTests(TestCase):
 
     def test_login_valid_returns_200(self):
