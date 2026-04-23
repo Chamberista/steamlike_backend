@@ -32,7 +32,7 @@ class LibraryEntry(models.Model):
         return len(self.external_game_id or "")
 
     def external_id_upper(self) -> str:
-        return (self.external_game_id or "").upper()
+        return str(self.external_game_id or "").upper()
 
     def hours_played_label(self) -> str:
         if self.hours_played == 0:
