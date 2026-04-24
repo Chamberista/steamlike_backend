@@ -240,3 +240,60 @@ class HealthEndpointInvalidMethodTests(TestCase):
         """POST /api/health/ no es válido y debe devolver 405 Method Not Allowed"""
         response = self.client.post("/api/health/")
         self.assertEqual(response.status_code, 405)
+
+
+class LibraryEntriesListTests(TestCase):
+
+    def test_entries_without_auth_returns_401(self):
+        # Precondiciones: sin autenticar
+        response = self.client.get("/api/library/entries/")
+
+        # Comprobaciones
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["message"], "No autenticado")
+
+    def test_entries_authenticated_returns_200(self):
+        # Precondiciones: usuario creado y sesión iniciada
+        User.objects.create_user(username="testuser", password="password123")
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": "testuser", "password": "password123"}),
+            content_type="application/json",
+        )
+
+        # Llamada
+        response = self.client.get("/api/library/entries/")
+
+        # Comprobaciones
+        self.assertEqual(response.status_code, 200)
+
+    def test_entries_each_user_sees_only_own_entries(self):
+        # Precondiciones: dos usuarios con entradas propias
+        user1 = User.objects.create_user(username="user1", password="password123")
+        user2 = User.objects.create_user(username="user2", password="password123")
+
+        from library.models import LibraryEntry
+        LibraryEntry.objects.create(user=user1, external_game_id="game1", status="playing")
+        LibraryEntry.objects.create(user=user2, external_game_id="game2", status="wishlist")
+
+        # user1 ve solo su entrada
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": "user1", "password": "password123"}),
+            content_type="application/json",
+        )
+        response = self.client.get("/api/library/entries/")
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["external_game_id"], "game1")
+
+        # user2 ve solo su entrada
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": "user2", "password": "password123"}),
+            content_type="application/json",
+        )
+        response = self.client.get("/api/library/entries/")
+        data = response.json()
+        self.assertEqual(len(data), 1)
+        self.assertEqual(data[0]["external_game_id"], "game2")
