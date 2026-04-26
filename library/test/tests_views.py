@@ -297,3 +297,111 @@ class LibraryEntriesListTests(TestCase):
         data = response.json()
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0]["external_game_id"], "game2")
+
+
+class LibraryEntryDetailTests(TestCase):
+
+    def _login(self, username, password="password123"):
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": username, "password": password}),
+            content_type="application/json",
+        )
+
+    def test_entry_detail_without_auth_returns_401(self):
+        # Precondiciones: entrada existente, sin autenticar
+        from library.models import LibraryEntry
+        user = User.objects.create_user(username="owner", password="password123")
+        entry = LibraryEntry.objects.create(user=user, external_game_id="game1", status="playing")
+
+        response = self.client.get(f"/api/library/entries/{entry.id}/")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["message"], "No autenticado")
+
+    def test_entry_detail_own_entry_returns_200(self):
+        # Precondiciones: usuario autenticado pide su propia entrada
+        from library.models import LibraryEntry
+        user = User.objects.create_user(username="owner", password="password123")
+        entry = LibraryEntry.objects.create(user=user, external_game_id="game1", status="playing")
+        self._login("owner")
+
+        response = self.client.get(f"/api/library/entries/{entry.id}/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_entry_detail_other_user_entry_returns_404(self):
+        # Precondiciones: dos usuarios, uno pide la entrada del otro
+        from library.models import LibraryEntry
+        owner = User.objects.create_user(username="owner", password="password123")
+        User.objects.create_user(username="other", password="password123")
+        entry = LibraryEntry.objects.create(user=owner, external_game_id="game1", status="playing")
+        self._login("other")
+
+        response = self.client.get(f"/api/library/entries/{entry.id}/")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["message"], "La entrada solicitada no existe")
+
+
+class LibraryEntryCreateTests(TestCase):
+
+    def _login(self, username, password="password123"):
+        self.client.post(
+            "/api/auth/login/",
+            data=json.dumps({"username": username, "password": password}),
+            content_type="application/json",
+        )
+
+    def test_create_entry_without_auth_returns_401(self):
+        # Precondiciones: sin autenticar
+        payload = {"external_game_id": "game1", "status": "playing"}
+
+        response = self.client.post(
+            "/api/library/entries/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["message"], "No autenticado")
+
+    def test_create_entry_authenticated_returns_201(self):
+        # Precondiciones: usuario autenticado
+        User.objects.create_user(username="testuser", password="password123")
+        self._login("testuser")
+        payload = {"external_game_id": "game1", "status": "playing"}
+
+        response = self.client.post(
+            "/api/library/entries/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_create_entry_isolation_between_users(self):
+        # Precondiciones: dos usuarios, cada uno crea su entrada
+        User.objects.create_user(username="user1", password="password123")
+        User.objects.create_user(username="user2", password="password123")
+
+        self._login("user1")
+        self.client.post(
+            "/api/library/entries/",
+            data=json.dumps({"external_game_id": "game1", "status": "playing"}),
+            content_type="application/json",
+        )
+
+        self._login("user2")
+        self.client.post(
+            "/api/library/entries/",
+            data=json.dumps({"external_game_id": "game2", "status": "wishlist"}),
+            content_type="application/json",
+        )
+
+        # user1 no ve la entrada de user2
+        self._login("user1")
+        response = self.client.get("/api/library/entries/")
+        ids = [e["external_game_id"] for e in response.json()]
+        self.assertIn("game1", ids)
+        self.assertNotIn("game2", ids)
