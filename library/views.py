@@ -124,6 +124,12 @@ def health(request):
     return JsonResponse({"status": "ok"})
 
 
+@require_GET
+def prueba(request):
+    """GET /api/prueba/"""
+    return JsonResponse({"prueba": "exitosa"})
+
+
 @csrf_exempt
 def entries(request):
     """GET /api/library/entries/ — listar. POST — crear."""
