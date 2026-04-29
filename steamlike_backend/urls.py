@@ -12,5 +12,5 @@ urlpatterns = [
     path("api/users/me/password/", change_password, name="change_password"),
     path("api/library/entries/", entries, name="entries"),  # GET y POST
     path("api/library/entries/<int:entry_id>/", entries_detail, name="entries_detail"),  # GET y PATCH
-    path("api/prueba/", prueba, name="prueba"),
+    path("api/prueba/", prueba, name="prueba"), #commit ultimo
 ]
