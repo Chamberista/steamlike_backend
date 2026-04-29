@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from library.views import health, register, login_view, logout_view, me, change_password, entries, entries_detail
+from library.views import health, register, login_view, logout_view, me, change_password, entries, entries_detail, prueba
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -12,4 +12,5 @@ urlpatterns = [
     path("api/users/me/password/", change_password, name="change_password"),
     path("api/library/entries/", entries, name="entries"),  # GET y POST
     path("api/library/entries/<int:entry_id>/", entries_detail, name="entries_detail"),  # GET y PATCH
+    path("api/prueba/", prueba, name="prueba"),
 ]
