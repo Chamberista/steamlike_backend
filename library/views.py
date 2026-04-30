@@ -293,6 +293,33 @@ def catalog_search(request):
     return JsonResponse(games, safe=False)
 
 
+@require_http_methods(["POST"])
+@csrf_exempt
+def catalog_resolve(request):
+    """POST /api/catalog/resolve/"""
+    data, err = parse_json_body(request)
+    if err:
+        return err
+
+    ids = data.get("external_game_ids")
+    if not isinstance(ids, list) or not ids or not all(isinstance(i, str) and i.strip() for i in ids):
+        return validation_error({"external_game_ids": "Debe ser una lista de strings no vacía"})
+
+    result, err = _fetch_cheapshark({"ids": ",".join(ids)})
+    if err:
+        return err
+
+    games = [
+        {
+            "external_game_id": game_id,
+            "title": info["info"]["title"],
+            "thumb": info["info"]["thumb"],
+        }
+        for game_id, info in result.items()
+    ]
+    return JsonResponse(games, safe=False)
+
+
 @require_GET
 def catalog_by_ids(request):
     """GET /api/catalog/games/?ids=612,627 — consultar varios juegos por gameID."""

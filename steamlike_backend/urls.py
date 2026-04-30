@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path
-from library.views import health, register, login_view, logout_view, me, change_password, entries, entries_detail, catalog_search, catalog_by_ids
+from library.views import health, register, login_view, logout_view, me, change_password, entries, entries_detail, catalog_search, catalog_by_ids, catalog_resolve
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -14,4 +14,5 @@ urlpatterns = [
     path("api/library/entries/<int:entry_id>/", entries_detail, name="entries_detail"),
     path("api/catalog/search/", catalog_search, name="catalog_search"),
     path("api/catalog/games/", catalog_by_ids, name="catalog_by_ids"),
+    path("api/catalog/resolve/", catalog_resolve, name="catalog_resolve"),
 ]
