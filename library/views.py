@@ -1,3 +1,4 @@
+import requests
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse
@@ -7,6 +8,36 @@ from .utils import (
     validation_error, unauthorized_error, not_found_error,
     duplicate_entry_error, parse_json_body, serialize_entry,
 )
+
+_CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
+_CHEAPSHARK_TIMEOUT = 8
+
+
+def _fetch_cheapshark(params: dict):
+    try:
+        response = requests.get(_CHEAPSHARK_BASE, params=params, timeout=_CHEAPSHARK_TIMEOUT)
+    except requests.exceptions.Timeout:
+        return None, JsonResponse(
+            {"error": "external_service_unavailable", "message": "CheapShark no respondió a tiempo"},
+            status=503,
+        )
+    except requests.exceptions.ConnectionError:
+        return None, JsonResponse(
+            {"error": "external_service_unavailable", "message": "No se pudo conectar con CheapShark"},
+            status=503,
+        )
+    if not response.ok:
+        return None, JsonResponse(
+            {"error": "external_service_error", "message": "CheapShark devolvió un error"},
+            status=502,
+        )
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, JsonResponse(
+            {"error": "external_service_error", "message": "Respuesta de CheapShark no válida"},
+            status=502,
+        )
 
 User = get_user_model()
 
@@ -236,3 +267,49 @@ def entries_detail(request, entry_id):
     entry.hours_played = hours_played
     entry.save()
     return JsonResponse(serialize_entry(entry), status=200)
+
+
+# ===== CATALOG ENDPOINTS =====
+
+@require_GET
+def catalog_search(request):
+    """GET /api/catalog/search/?title=batman — buscar juegos por título en CheapShark."""
+    title = request.GET.get("title", "").strip()
+    if not title:
+        return JsonResponse({"error": "validation_error", "message": "El parámetro 'title' es requerido"}, status=400)
+
+    data, err = _fetch_cheapshark({"title": title})
+    if err:
+        return err
+
+    games = [
+        {
+            "id": game["gameID"],
+            "title": game["external"],
+            "thumbnail": game["thumb"],
+        }
+        for game in data
+    ]
+    return JsonResponse(games, safe=False)
+
+
+@require_GET
+def catalog_by_ids(request):
+    """GET /api/catalog/games/?ids=612,627 — consultar varios juegos por gameID."""
+    ids_param = request.GET.get("ids", "").strip()
+    if not ids_param:
+        return JsonResponse({"error": "validation_error", "message": "El parámetro 'ids' es requerido"}, status=400)
+
+    data, err = _fetch_cheapshark({"ids": ids_param})
+    if err:
+        return err
+
+    games = [
+        {
+            "id": game_id,
+            "title": info["info"]["title"],
+            "thumbnail": info["info"]["thumb"],
+        }
+        for game_id, info in data.items()
+    ]
+    return JsonResponse(games, safe=False)
