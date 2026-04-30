@@ -16,26 +16,21 @@ _CHEAPSHARK_TIMEOUT = 8
 def _fetch_cheapshark(params: dict):
     try:
         response = requests.get(_CHEAPSHARK_BASE, params=params, timeout=_CHEAPSHARK_TIMEOUT)
-    except requests.exceptions.Timeout:
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
         return None, JsonResponse(
-            {"error": "external_service_unavailable", "message": "CheapShark no respondió a tiempo"},
-            status=503,
-        )
-    except requests.exceptions.ConnectionError:
-        return None, JsonResponse(
-            {"error": "external_service_unavailable", "message": "No se pudo conectar con CheapShark"},
+            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
             status=503,
         )
     if not response.ok:
         return None, JsonResponse(
-            {"error": "external_service_error", "message": "CheapShark devolvió un error"},
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
             status=502,
         )
     try:
         return response.json(), None
     except ValueError:
         return None, JsonResponse(
-            {"error": "external_service_error", "message": "Respuesta de CheapShark no válida"},
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
             status=502,
         )
 
@@ -181,6 +176,32 @@ def entries(request):
     hours_played = data.get("hours_played", 0)
     if not isinstance(hours_played, int) or hours_played < 0:
         return validation_error({"hours_played": "Debe ser un número entero >= 0"})
+
+    # Caso C: verificar que el juego existe en CheapShark
+    try:
+        cs_response = requests.get(_CHEAPSHARK_BASE, params={"ids": external_game_id}, timeout=_CHEAPSHARK_TIMEOUT)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        return JsonResponse(
+            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
+            status=503,
+        )
+    if cs_response.status_code >= 500:
+        return JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
+    try:
+        cs_data = cs_response.json()
+    except ValueError:
+        return JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
+    if not cs_response.ok or not cs_data or external_game_id not in cs_data:
+        return JsonResponse(
+            {"error": "invalid_external_game_id", "message": "El juego indicado no existe en el catálogo externo.", "details": {"external_game_id": "not_found"}},
+            status=400,
+        )
 
     if LibraryEntry.objects.filter(user=request.user, external_game_id=external_game_id).exists():
         return duplicate_entry_error("external_game_id", external_game_id)
