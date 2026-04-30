@@ -273,20 +273,20 @@ def entries_detail(request, entry_id):
 
 @require_GET
 def catalog_search(request):
-    """GET /api/catalog/search/?title=batman — buscar juegos por título en CheapShark."""
-    title = request.GET.get("title", "").strip()
-    if not title:
-        return JsonResponse({"error": "validation_error", "message": "El parámetro 'title' es requerido"}, status=400)
+    """GET /api/catalog/search/?q=mario"""
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"error": "validation_error", "message": "El parámetro 'q' es requerido"}, status=400)
 
-    data, err = _fetch_cheapshark({"title": title})
+    data, err = _fetch_cheapshark({"title": q})
     if err:
         return err
 
     games = [
         {
-            "id": game["gameID"],
+            "external_game_id": game["gameID"],
             "title": game["external"],
-            "thumbnail": game["thumb"],
+            "thumb": game["thumb"],
         }
         for game in data
     ]
