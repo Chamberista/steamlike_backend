@@ -2,6 +2,8 @@
 
 Backend Django para el proyecto que se realizará en DWES de 2º DAW.
 
+<!-- CI verificado con GitHub Actions -->
+
 ## Arranque del proyecto
 
 ### 1) Levantar contenedores
