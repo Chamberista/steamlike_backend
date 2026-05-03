@@ -19,7 +19,7 @@ class RegisterValidTests(TestCase):
         )
 
         # Comprobaciones
-        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.status_code, 999)  # FALLO INTENCIONADO
         data = response.json()
         self.assertIn("id", data)
         self.assertIn("username", data)
