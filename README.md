@@ -2,7 +2,7 @@
 
 Backend Django para el proyecto que se realizará en DWES de 2º DAW.
 
-<!-- CI verificado con GitHub Actions  -->
+<!-- CI verificado con GitHub Actions.  -->
 
 ## Arranque del proyecto
 
@@ -136,3 +136,7 @@ pero **no mide la calidad de los tests**.
 
 
 Esto es una prueba para el ej 3
+
+
+
+Cambio ejercicio 3 opt
