@@ -2,7 +2,7 @@ import requests
 from django.conf import settings
 
 
-MAILEROO_API_URL = "https://smtp.maileroo.com/send"
+MAILEROO_API_URL = "https://smtp.maileroo.com/api/v2/emails"
 TIMEOUT_SECONDS = 10
 
 
@@ -15,26 +15,37 @@ class ExternalServiceError(Exception):
 
 
 class EmailService:
-    def __init__(self):
+    def __init__(self, api_url: str = MAILEROO_API_URL):
+        self._api_url = api_url
         self._token = settings.MAILEROO_TOKEN
         self._from = settings.MAILEROO_FROM_ADDRESS
 
     def send_email(self, to: str, subject: str, text: str, html: str | None = None) -> dict:
+        """
+        Envía un email mediante Maileroo.
+
+        Raises:
+            ExternalServiceUnavailable: timeout o fallo de red → equivalente a 503.
+            ExternalServiceError: respuesta de error o inválida de Maileroo → equivalente a 502.
+        """
         payload = {
-            "from": self._from,
-            "to": to,
+            "from": {"address": self._from},
+            "to": [{"address": to}],
             "subject": subject,
-            "plain_body": text,
+            "plain": text,
         }
         if html:
-            payload["html_body"] = html
+            payload["html"] = html
 
-        headers = {"X-API-Key": self._token}
+        headers = {
+            "X-Api-Key": self._token,
+            "Accept": "application/json",
+        }
 
         try:
             response = requests.post(
-                MAILEROO_API_URL,
-                data=payload,
+                self._api_url,
+                json=payload,
                 headers=headers,
                 timeout=TIMEOUT_SECONDS,
             )
@@ -43,12 +54,16 @@ class EmailService:
         except requests.exceptions.ConnectionError as exc:
             raise ExternalServiceUnavailable(f"Maileroo: error de red — {exc}")
 
-        if not response.ok:
-            raise ExternalServiceError(
-                f"Maileroo respondió {response.status_code}: {response.text[:200]}"
-            )
-
         try:
-            return response.json()
+            body = response.json()
         except ValueError:
             raise ExternalServiceError("Maileroo: respuesta no es JSON válido")
+
+        if not response.ok:
+            detail = body.get("message") or response.text[:200]
+            raise ExternalServiceError(f"Maileroo respondió {response.status_code}: {detail}")
+
+        if not body.get("success", False):
+            raise ExternalServiceError(f"Maileroo indicó fallo: {body.get('message', 'sin detalle')}")
+
+        return body

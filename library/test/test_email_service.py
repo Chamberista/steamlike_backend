@@ -21,7 +21,11 @@ class EmailServiceTest(TestCase):
     def test_send_email_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.ok = True
-        mock_response.json.return_value = {"message_id": "abc123"}
+        mock_response.json.return_value = {
+            "success": True,
+            "message": "The email has been scheduled for delivery.",
+            "data": {"reference_id": "abc123"},
+        }
         mock_post.return_value = mock_response
 
         result = self._service().send_email(
@@ -30,7 +34,7 @@ class EmailServiceTest(TestCase):
             text="Cuerpo del email",
         )
 
-        self.assertEqual(result["message_id"], "abc123")
+        self.assertTrue(result["success"])
         mock_post.assert_called_once()
 
     # --- Test 2: 503 — timeout de red ---
@@ -51,7 +55,7 @@ class EmailServiceTest(TestCase):
         mock_response = MagicMock()
         mock_response.ok = False
         mock_response.status_code = 401
-        mock_response.text = "Unauthorized"
+        mock_response.json.return_value = {"message": "Unauthorized"}
         mock_post.return_value = mock_response
 
         with self.assertRaises(ExternalServiceError):
