@@ -38,3 +38,12 @@ jobs:
           POSTGRES_DB: steamlike
           POSTGRES_USER: steamlike
           POSTGRES_PASSWORD: steamlike
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Trigger Render deploy
+        run: curl -f -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
