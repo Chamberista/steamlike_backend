@@ -136,7 +136,3 @@ pero **no mide la calidad de los tests**.
 
 
 Esto es una prueba para el ej 3
-
-
-
-Cambio ejercicio 3 opt
