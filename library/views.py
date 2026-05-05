@@ -3,11 +3,13 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model, authenticate, login, logout
+from django.conf import settings
 from .models import LibraryEntry
 from .utils import (
     validation_error, unauthorized_error, not_found_error,
     duplicate_entry_error, parse_json_body, serialize_entry,
 )
+from .email_service import EmailService, ExternalServiceUnavailable, ExternalServiceError
 
 _CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
 _CHEAPSHARK_TIMEOUT = 8
@@ -361,3 +363,33 @@ def catalog_by_ids(request):
         for game_id, info in data.items()
     ]
     return JsonResponse(games, safe=False)
+
+
+@csrf_exempt
+@require_POST
+def debug_email_test(request):
+    if not settings.DEBUG:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    data, err = parse_json_body(request)
+    if err:
+        return err
+
+    to = data.get("to")
+    subject = data.get("subject")
+    text = data.get("text")
+
+    if not isinstance(to, str) or not to.strip():
+        return validation_error({"to": "Requerido y debe ser texto"})
+    if not isinstance(subject, str) or not subject.strip():
+        return validation_error({"subject": "Requerido y debe ser texto"})
+    if not isinstance(text, str) or not text.strip():
+        return validation_error({"text": "Requerido y debe ser texto"})
+
+    try:
+        EmailService().send_email(to=to, subject=subject, text=text)
+        return JsonResponse({"ok": True})
+    except ExternalServiceUnavailable:
+        return JsonResponse({"error": "external_service_unavailable"}, status=503)
+    except ExternalServiceError:
+        return JsonResponse({"error": "external_service_error"}, status=502)
