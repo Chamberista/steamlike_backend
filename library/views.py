@@ -76,9 +76,21 @@ def register(request):
 
     try:
         user = User.objects.create_user(username=username, password=password, email=email)
-        return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, status=201)
     except Exception as e:
         return validation_error({"server": str(e)})
+
+    try:
+        EmailService().send_email(
+            to=email,
+            subject="Bienvenido a SteamLink",
+            text=f"Hola {username}, tu cuenta ha sido creada correctamente.",
+            action="register_welcome",
+            user=username,
+        )
+    except (ExternalServiceUnavailable, ExternalServiceError):
+        pass
+
+    return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, status=201)
 
 
 @require_http_methods(["POST"])
