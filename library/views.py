@@ -51,25 +51,32 @@ def register(request):
 
     username = data.get("username")
     password = data.get("password")
+    email = data.get("email")
 
     if username is None:
         return validation_error({"username": "Campo requerido"})
     if password is None:
         return validation_error({"password": "Campo requerido"})
+    if email is None:
+        return validation_error({"email": "Campo requerido"})
     if not isinstance(username, str):
         return validation_error({"username": "Debe ser texto"})
     if not isinstance(password, str):
         return validation_error({"password": "Debe ser texto"})
+    if not isinstance(email, str):
+        return validation_error({"email": "Debe ser texto"})
     if not username.strip():
         return validation_error({"username": "No puede estar vacío"})
     if len(password) < 8:
         return validation_error({"password": "Mínimo 8 caracteres"})
+    if "@" not in email or not email.strip():
+        return validation_error({"email": "Formato de email inválido"})
     if User.objects.filter(username=username).exists():
         return validation_error({"username": "Ya existe"})
 
     try:
-        user = User.objects.create_user(username=username, password=password)
-        return JsonResponse({"id": user.id, "username": user.username}, status=201)
+        user = User.objects.create_user(username=username, password=password, email=email)
+        return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, status=201)
     except Exception as e:
         return validation_error({"server": str(e)})
 
