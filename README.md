@@ -135,4 +135,4 @@ El coverage es una métrica orientativa,
 pero **no mide la calidad de los tests**.
 
 
-Esto es una prueba para el ej 3
+Esto es una prueba para el ej 3.
