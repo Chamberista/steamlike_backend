@@ -38,3 +38,4 @@ class EmailServiceTest(TestCase):
 
         with self.assertRaises(ExternalServiceError):
             EmailService().send_email("x@x.com", "Sub", "Texto")
+

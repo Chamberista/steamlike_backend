@@ -110,3 +110,25 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # --- Maileroo ---
 MAILEROO_TOKEN = _env("MAILEROO_TOKEN", "")
 MAILEROO_FROM_ADDRESS = _env("MAILEROO_FROM_ADDRESS", "")
+
+# --- Logging ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {name} {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
