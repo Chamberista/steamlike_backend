@@ -2,5 +2,13 @@
   "name": "steamlike_backend",
   "dockerComposeFile": "../docker-compose.yml",
   "service": "web",
-  "workspaceFolder": "/app"
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.vscode-pylance",
+        "redhat.java"
+      ]
+    }
+  }
 }
