@@ -1,12 +1,40 @@
+import requests
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model, authenticate, login, logout
+from django.conf import settings
 from .models import LibraryEntry
 from .utils import (
     validation_error, unauthorized_error, not_found_error,
     duplicate_entry_error, parse_json_body, serialize_entry,
 )
+from .email_service import EmailService, ExternalServiceUnavailable, ExternalServiceError
+
+_CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
+_CHEAPSHARK_TIMEOUT = 8
+
+
+def _fetch_cheapshark(params: dict):
+    try:
+        response = requests.get(_CHEAPSHARK_BASE, params=params, timeout=_CHEAPSHARK_TIMEOUT)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        return None, JsonResponse(
+            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
+            status=503,
+        )
+    if not response.ok:
+        return None, JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
+    try:
+        return response.json(), None
+    except ValueError:
+        return None, JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
 
 User = get_user_model()
 
@@ -23,27 +51,46 @@ def register(request):
 
     username = data.get("username")
     password = data.get("password")
+    email = data.get("email")
 
     if username is None:
         return validation_error({"username": "Campo requerido"})
     if password is None:
         return validation_error({"password": "Campo requerido"})
+    if email is None:
+        return validation_error({"email": "Campo requerido"})
     if not isinstance(username, str):
         return validation_error({"username": "Debe ser texto"})
     if not isinstance(password, str):
         return validation_error({"password": "Debe ser texto"})
+    if not isinstance(email, str):
+        return validation_error({"email": "Debe ser texto"})
     if not username.strip():
         return validation_error({"username": "No puede estar vacío"})
     if len(password) < 8:
         return validation_error({"password": "Mínimo 8 caracteres"})
+    if "@" not in email or not email.strip():
+        return validation_error({"email": "Formato de email inválido"})
     if User.objects.filter(username=username).exists():
         return validation_error({"username": "Ya existe"})
 
     try:
-        user = User.objects.create_user(username=username, password=password)
-        return JsonResponse({"id": user.id, "username": user.username}, status=201)
+        user = User.objects.create_user(username=username, password=password, email=email)
     except Exception as e:
         return validation_error({"server": str(e)})
+
+    try:
+        EmailService().send_email(
+            to=email,
+            subject="Bienvenido a SteamLink",
+            text=f"Hola {username}, tu cuenta ha sido creada correctamente.",
+            action="register_welcome",
+            user=username,
+        )
+    except (ExternalServiceUnavailable, ExternalServiceError):
+        pass
+
+    return JsonResponse({"id": user.id, "username": user.username, "email": user.email}, status=201)
 
 
 @require_http_methods(["POST"])
@@ -157,6 +204,32 @@ def entries(request):
     if not isinstance(hours_played, int) or hours_played < 0:
         return validation_error({"hours_played": "Debe ser un número entero >= 0"})
 
+    # Caso C: verificar que el juego existe en CheapShark
+    try:
+        cs_response = requests.get(_CHEAPSHARK_BASE, params={"ids": external_game_id}, timeout=_CHEAPSHARK_TIMEOUT)
+    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+        return JsonResponse(
+            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
+            status=503,
+        )
+    if cs_response.status_code >= 500:
+        return JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
+    try:
+        cs_data = cs_response.json()
+    except ValueError:
+        return JsonResponse(
+            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
+            status=502,
+        )
+    if not cs_response.ok or not cs_data or external_game_id not in cs_data:
+        return JsonResponse(
+            {"error": "invalid_external_game_id", "message": "El juego indicado no existe en el catálogo externo.", "details": {"external_game_id": "not_found"}},
+            status=400,
+        )
+
     if LibraryEntry.objects.filter(user=request.user, external_game_id=external_game_id).exists():
         return duplicate_entry_error("external_game_id", external_game_id)
 
@@ -242,3 +315,106 @@ def entries_detail(request, entry_id):
     entry.hours_played = hours_played
     entry.save()
     return JsonResponse(serialize_entry(entry), status=200)
+
+
+# ===== CATALOG ENDPOINTS =====
+
+@require_GET
+def catalog_search(request):
+    """GET /api/catalog/search/?q=mario"""
+    q = request.GET.get("q", "").strip()
+    if not q:
+        return JsonResponse({"error": "validation_error", "message": "El parámetro 'q' es requerido"}, status=400)
+
+    data, err = _fetch_cheapshark({"title": q})
+    if err:
+        return err
+
+    games = [
+        {
+            "external_game_id": game["gameID"],
+            "title": game["external"],
+            "thumb": game["thumb"],
+        }
+        for game in data
+    ]
+    return JsonResponse(games, safe=False)
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def catalog_resolve(request):
+    """POST /api/catalog/resolve/"""
+    data, err = parse_json_body(request)
+    if err:
+        return err
+
+    ids = data.get("external_game_ids")
+    if not isinstance(ids, list) or not ids or not all(isinstance(i, str) and i.strip() for i in ids):
+        return validation_error({"external_game_ids": "Debe ser una lista de strings no vacía"})
+
+    result, err = _fetch_cheapshark({"ids": ",".join(ids)})
+    if err:
+        return err
+
+    games = [
+        {
+            "external_game_id": game_id,
+            "title": info["info"]["title"],
+            "thumb": info["info"]["thumb"],
+        }
+        for game_id, info in result.items()
+    ]
+    return JsonResponse(games, safe=False)
+
+
+@require_GET
+def catalog_by_ids(request):
+    """GET /api/catalog/games/?ids=612,627 — consultar varios juegos por gameID."""
+    ids_param = request.GET.get("ids", "").strip()
+    if not ids_param:
+        return JsonResponse({"error": "validation_error", "message": "El parámetro 'ids' es requerido"}, status=400)
+
+    data, err = _fetch_cheapshark({"ids": ids_param})
+    if err:
+        return err
+
+    games = [
+        {
+            "id": game_id,
+            "title": info["info"]["title"],
+            "thumbnail": info["info"]["thumb"],
+        }
+        for game_id, info in data.items()
+    ]
+    return JsonResponse(games, safe=False)
+
+
+@csrf_exempt
+@require_POST
+def debug_email_test(request):
+    if not settings.DEBUG:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    data, err = parse_json_body(request)
+    if err:
+        return err
+
+    to = data.get("to")
+    subject = data.get("subject")
+    text = data.get("text")
+
+    if not isinstance(to, str) or not to.strip():
+        return validation_error({"to": "Requerido y debe ser texto"})
+    if not isinstance(subject, str) or not subject.strip():
+        return validation_error({"subject": "Requerido y debe ser texto"})
+    if not isinstance(text, str) or not text.strip():
+        return validation_error({"text": "Requerido y debe ser texto"})
+
+    try:
+        EmailService().send_email(to=to, subject=subject, text=text)
+        return JsonResponse({"ok": True})
+    except ExternalServiceUnavailable:
+        return JsonResponse({"error": "external_service_unavailable"}, status=503)
+    except ExternalServiceError:
+        return JsonResponse({"error": "external_service_error"}, status=502)
