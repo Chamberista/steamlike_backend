@@ -107,6 +107,14 @@ CSRF_TRUSTED_ORIGINS = _env_csv("DJANGO_CSRF_TRUSTED_ORIGINS", "http://frontend:
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
+# --- Cache (Redis) ---
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "LOCATION": _env("REDIS_URL", "redis://redis:6379/0"),
+    }
+}
+
 # --- Maileroo ---
 MAILEROO_TOKEN = _env("MAILEROO_TOKEN", "")
 MAILEROO_FROM_ADDRESS = _env("MAILEROO_FROM_ADDRESS", "")
