@@ -1,5 +1,8 @@
+import logging
 import requests
 from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
 
 _CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
 # _CHEAPSHARK_BASE = "https://www.cheapshark.invalid/api/1.0/games" # Error 503
@@ -29,16 +32,22 @@ def _fetch(params):
 
 def search(q):
     cache_key = f"{_SEARCH_CACHE_PREFIX}:{q.lower()}"
+
+    logger.info("catalog:search q=%s — consultando Redis", q)
     cached = cache.get(cache_key)
     if cached is not None:
+        logger.info("catalog:search q=%s — datos obtenidos desde Redis", q)
         return cached
 
+    logger.info("catalog:search q=%s — cache miss, consultando CheapShark", q)
     try:
         data = _fetch({"title": q})
-    except CatalogServiceError:
+    except CatalogServiceError as e:
         stale = cache.get(cache_key)
         if stale is not None:
+            logger.warning("catalog:search q=%s — fallo proveedor (status=%s), usando caché", q, e.status)
             return stale
+        logger.error("catalog:search q=%s — fallo proveedor (status=%s), sin caché disponible", q, e.status)
         raise
 
     games = [
@@ -46,6 +55,7 @@ def search(q):
         for g in data
     ]
     cache.set(cache_key, games, timeout=_SEARCH_CACHE_TTL)
+    logger.info("catalog:search q=%s — %d resultados de CheapShark, guardados en Redis", q, len(games))
     return games
 
 
