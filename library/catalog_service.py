@@ -2,6 +2,7 @@ import requests
 from django.core.cache import cache
 
 _CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
+# _CHEAPSHARK_BASE = "https://www.cheapshark.invalid/api/1.0/games" # Error 503
 _CHEAPSHARK_TIMEOUT = 8
 _SEARCH_CACHE_PREFIX = "catalog:search"
 _SEARCH_CACHE_TTL = 60 * 10  # 10 minutos
@@ -32,7 +33,14 @@ def search(q):
     if cached is not None:
         return cached
 
-    data = _fetch({"title": q})
+    try:
+        data = _fetch({"title": q})
+    except CatalogServiceError:
+        stale = cache.get(cache_key)
+        if stale is not None:
+            return stale
+        raise
+
     games = [
         {"external_game_id": g["gameID"], "title": g["external"], "thumb": g["thumb"]}
         for g in data
