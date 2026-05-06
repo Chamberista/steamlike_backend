@@ -1,40 +1,16 @@
-import requests
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model, authenticate, login, logout
 from django.conf import settings
 from .models import LibraryEntry
+from . import catalog_service
+from .catalog_service import CatalogServiceError
 from .utils import (
     validation_error, unauthorized_error, not_found_error,
     duplicate_entry_error, parse_json_body, serialize_entry,
 )
 from .email_service import EmailService, ExternalServiceUnavailable, ExternalServiceError
-
-_CHEAPSHARK_BASE = "https://www.cheapshark.com/api/1.0/games"
-_CHEAPSHARK_TIMEOUT = 8
-
-
-def _fetch_cheapshark(params: dict):
-    try:
-        response = requests.get(_CHEAPSHARK_BASE, params=params, timeout=_CHEAPSHARK_TIMEOUT)
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-        return None, JsonResponse(
-            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
-            status=503,
-        )
-    if not response.ok:
-        return None, JsonResponse(
-            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
-            status=502,
-        )
-    try:
-        return response.json(), None
-    except ValueError:
-        return None, JsonResponse(
-            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
-            status=502,
-        )
 
 User = get_user_model()
 
@@ -206,25 +182,10 @@ def entries(request):
 
     # Caso C: verificar que el juego existe en CheapShark
     try:
-        cs_response = requests.get(_CHEAPSHARK_BASE, params={"ids": external_game_id}, timeout=_CHEAPSHARK_TIMEOUT)
-    except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
-        return JsonResponse(
-            {"error": "external_service_unavailable", "message": "El catálogo externo no está disponible. Inténtalo más tarde."},
-            status=503,
-        )
-    if cs_response.status_code >= 500:
-        return JsonResponse(
-            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
-            status=502,
-        )
-    try:
-        cs_data = cs_response.json()
-    except ValueError:
-        return JsonResponse(
-            {"error": "external_service_error", "message": "Error al consultar el catálogo externo."},
-            status=502,
-        )
-    if not cs_response.ok or not cs_data or external_game_id not in cs_data:
+        exists = catalog_service.verify_game_exists(external_game_id)
+    except CatalogServiceError as e:
+        return JsonResponse({"error": "external_service_error", "message": e.message}, status=e.status)
+    if not exists:
         return JsonResponse(
             {"error": "invalid_external_game_id", "message": "El juego indicado no existe en el catálogo externo.", "details": {"external_game_id": "not_found"}},
             status=400,
@@ -325,21 +286,10 @@ def catalog_search(request):
     q = request.GET.get("q", "").strip()
     if not q:
         return JsonResponse({"error": "validation_error", "message": "El parámetro 'q' es requerido"}, status=400)
-
-    data, err = _fetch_cheapshark({"title": q})
-    if err:
-        return err
-
-    games = [
-        {
-            "external_game_id": game["gameID"],
-            "title": game["external"],
-            "thumb": game["thumb"],
-        }
-        for game in data
-    ]
-    return JsonResponse(games, safe=False)
-
+    try:
+        return JsonResponse(catalog_service.search(q), safe=False)
+    except CatalogServiceError as e:
+        return JsonResponse({"error": "external_service_error", "message": e.message}, status=e.status)
 
 @require_http_methods(["POST"])
 @csrf_exempt
@@ -353,19 +303,10 @@ def catalog_resolve(request):
     if not isinstance(ids, list) or not ids or not all(isinstance(i, str) and i.strip() for i in ids):
         return validation_error({"external_game_ids": "Debe ser una lista de strings no vacía"})
 
-    result, err = _fetch_cheapshark({"ids": ",".join(ids)})
-    if err:
-        return err
-
-    games = [
-        {
-            "external_game_id": game_id,
-            "title": info["info"]["title"],
-            "thumb": info["info"]["thumb"],
-        }
-        for game_id, info in result.items()
-    ]
-    return JsonResponse(games, safe=False)
+    try:
+        return JsonResponse(catalog_service.resolve(ids), safe=False)
+    except CatalogServiceError as e:
+        return JsonResponse({"error": "external_service_error", "message": e.message}, status=e.status)
 
 
 @require_GET
@@ -375,19 +316,10 @@ def catalog_by_ids(request):
     if not ids_param:
         return JsonResponse({"error": "validation_error", "message": "El parámetro 'ids' es requerido"}, status=400)
 
-    data, err = _fetch_cheapshark({"ids": ids_param})
-    if err:
-        return err
-
-    games = [
-        {
-            "id": game_id,
-            "title": info["info"]["title"],
-            "thumbnail": info["info"]["thumb"],
-        }
-        for game_id, info in data.items()
-    ]
-    return JsonResponse(games, safe=False)
+    try:
+        return JsonResponse(catalog_service.by_ids(ids_param), safe=False)
+    except CatalogServiceError as e:
+        return JsonResponse({"error": "external_service_error", "message": e.message}, status=e.status)
 
 
 @csrf_exempt
