@@ -15,5 +15,5 @@ urlpatterns = [
     path("api/catalog/search/", catalog_search, name="catalog_search"),
     path("api/catalog/games/", catalog_by_ids, name="catalog_by_ids"),
     path("api/catalog/resolve/", catalog_resolve, name="catalog_resolve"),
-    path("api/debug/email/test/", debug_email_test, name="debug_email_test"),
+    # path("api/debug/email/test/", debug_email_test, name="debug_email_test"),
 ]
